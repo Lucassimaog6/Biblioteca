@@ -13,12 +13,31 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-var ErrEmailExists = errors.New("email already exists")
+var (
+	ErrEmailExists  = errors.New("email already exists")
+	ErrBookNotFound = errors.New("book not found")
+	ErrBookNotOwned = errors.New("book is not owned by user")
+	ErrBookChanged  = errors.New("book changed during update")
+)
 
 type User struct {
 	ID        int64     `json:"id"`
 	Email     string    `json:"email"`
 	CreatedAt time.Time `json:"created_at"`
+}
+
+type Book struct {
+	ID               int64     `json:"id"`
+	Title            string    `json:"title"`
+	Author           string    `json:"author"`
+	Description      string    `json:"description"`
+	Filename         string    `json:"filename"`
+	FileSize         int64     `json:"file_size"`
+	CreatedAt        time.Time `json:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at"`
+	CanEdit          bool      `json:"can_edit"`
+	OwnerID          int64     `json:"-"`
+	FileKey          string    `json:"-"`
 }
 
 type Store struct {
@@ -86,11 +105,143 @@ func (s *Store) initialize(ctx context.Context) error {
 			expires_at INTEGER NOT NULL
 		);
 		CREATE INDEX IF NOT EXISTS sessions_expires_at ON sessions(expires_at);
+		CREATE TABLE IF NOT EXISTS books (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			title TEXT NOT NULL,
+			author TEXT NOT NULL DEFAULT '',
+			description TEXT NOT NULL DEFAULT '',
+			filename TEXT NOT NULL,
+			file_key TEXT NOT NULL,
+			file_size INTEGER NOT NULL,
+			created_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL
+		);
+		CREATE INDEX IF NOT EXISTS books_title ON books(title COLLATE NOCASE);
 	`
 	if _, err := s.db.ExecContext(ctx, schema); err != nil {
 		return fmt.Errorf("initialize SQLite schema: %w", err)
 	}
 	return nil
+}
+
+func (s *Store) CreateBook(ctx context.Context, book Book) (Book, error) {
+	now := time.Now().UTC()
+	result, err := s.db.ExecContext(ctx,
+		`INSERT INTO books (owner_id, title, author, description, filename, file_key, file_size, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		book.OwnerID, book.Title, book.Author, book.Description, book.Filename, book.FileKey, book.FileSize,
+		now.Format(time.RFC3339Nano), now.Format(time.RFC3339Nano),
+	)
+	if err != nil {
+		return Book{}, fmt.Errorf("insert book: %w", err)
+	}
+	book.ID, err = result.LastInsertId()
+	if err != nil {
+		return Book{}, fmt.Errorf("get inserted book ID: %w", err)
+	}
+	book.CreatedAt = now
+	book.UpdatedAt = now
+	return book, nil
+}
+
+func (s *Store) ListBooks(ctx context.Context, viewerID int64) ([]Book, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT id, owner_id, title, author, description, filename, file_key, file_size, created_at, updated_at
+		 FROM books ORDER BY title COLLATE NOCASE, id`,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("list books: %w", err)
+	}
+	defer rows.Close()
+
+	books := make([]Book, 0)
+	for rows.Next() {
+		var book Book
+		var createdAt, updatedAt string
+		if err := rows.Scan(
+			&book.ID, &book.OwnerID, &book.Title, &book.Author, &book.Description,
+			&book.Filename, &book.FileKey, &book.FileSize, &createdAt, &updatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("read book row: %w", err)
+		}
+		book.CreatedAt, err = time.Parse(time.RFC3339Nano, createdAt)
+		if err != nil {
+			return nil, fmt.Errorf("parse book creation time: %w", err)
+		}
+		book.UpdatedAt, err = time.Parse(time.RFC3339Nano, updatedAt)
+		if err != nil {
+			return nil, fmt.Errorf("parse book update time: %w", err)
+		}
+		book.CanEdit = book.OwnerID == viewerID
+		books = append(books, book)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate books: %w", err)
+	}
+	return books, nil
+}
+
+func (s *Store) FindBookForEdit(ctx context.Context, id, ownerID int64) (Book, error) {
+	book, err := s.findBook(ctx, id)
+	if err != nil {
+		return Book{}, err
+	}
+	if book.OwnerID != ownerID {
+		return Book{}, ErrBookNotOwned
+	}
+	return book, nil
+}
+
+func (s *Store) UpdateBook(ctx context.Context, book Book, expectedFileKey string) (Book, error) {
+	now := time.Now().UTC()
+	result, err := s.db.ExecContext(ctx,
+		`UPDATE books
+		 SET title = ?, author = ?, description = ?, filename = ?, file_key = ?, file_size = ?, updated_at = ?
+		 WHERE id = ? AND owner_id = ? AND file_key = ?`,
+		book.Title, book.Author, book.Description, book.Filename, book.FileKey, book.FileSize,
+		now.Format(time.RFC3339Nano), book.ID, book.OwnerID, expectedFileKey,
+	)
+	if err != nil {
+		return Book{}, fmt.Errorf("update book: %w", err)
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return Book{}, fmt.Errorf("check book update: %w", err)
+	}
+	if rowsAffected == 0 {
+		return Book{}, ErrBookChanged
+	}
+	book.UpdatedAt = now
+	return book, nil
+}
+
+func (s *Store) findBook(ctx context.Context, id int64) (Book, error) {
+	var book Book
+	var createdAt, updatedAt string
+	err := s.db.QueryRowContext(ctx,
+		`SELECT id, owner_id, title, author, description, filename, file_key, file_size, created_at, updated_at
+		 FROM books WHERE id = ?`,
+		id,
+	).Scan(
+		&book.ID, &book.OwnerID, &book.Title, &book.Author, &book.Description,
+		&book.Filename, &book.FileKey, &book.FileSize, &createdAt, &updatedAt,
+	)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Book{}, ErrBookNotFound
+	}
+	if err != nil {
+		return Book{}, fmt.Errorf("find book: %w", err)
+	}
+	book.CreatedAt, err = time.Parse(time.RFC3339Nano, createdAt)
+	if err != nil {
+		return Book{}, fmt.Errorf("parse book creation time: %w", err)
+	}
+	book.UpdatedAt, err = time.Parse(time.RFC3339Nano, updatedAt)
+	if err != nil {
+		return Book{}, fmt.Errorf("parse book update time: %w", err)
+	}
+	return book, nil
 }
 
 func (s *Store) CreateUser(ctx context.Context, email, passwordHash string) (User, error) {
