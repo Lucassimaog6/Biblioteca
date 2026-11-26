@@ -118,6 +118,10 @@ func TestBookCatalogUploadEditAndReadAuthorization(t *testing.T) {
 	if pdfResponse.Code != http.StatusOK || pdfResponse.Header().Get("Content-Type") != "application/pdf" || pdfResponse.Body.String() != "%PDF-1.7 data" {
 		t.Fatalf("PDF response status=%d type=%q body=%q", pdfResponse.Code, pdfResponse.Header().Get("Content-Type"), pdfResponse.Body.String())
 	}
+	if pdfResponse.Header().Get("Content-Security-Policy") != "default-src 'none'; frame-ancestors 'self'" || pdfResponse.Header().Get("X-Frame-Options") != "SAMEORIGIN" {
+		t.Fatalf("PDF response should allow embedding only by this origin: CSP=%q X-Frame-Options=%q",
+			pdfResponse.Header().Get("Content-Security-Policy"), pdfResponse.Header().Get("X-Frame-Options"))
+	}
 
 	replacement := performBookRequest(t, handler, http.MethodPut,
 		fmt.Sprintf("/api/v1/books/%d", created.Book.ID), ownerCookie, "Metadata only", "", "", "", "")

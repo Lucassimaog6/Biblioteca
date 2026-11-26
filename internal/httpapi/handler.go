@@ -315,6 +315,8 @@ func (h *Handler) bookFile(w http.ResponseWriter, r *http.Request) {
 		contentType = "application/epub+zip"
 	case ".pdf":
 		contentType = "application/pdf"
+		w.Header().Set("Content-Security-Policy", "default-src 'none'; frame-ancestors 'self'")
+		w.Header().Set("X-Frame-Options", "SAMEORIGIN")
 	}
 	w.Header().Set("Content-Type", contentType)
 	w.Header().Set("Content-Disposition", mime.FormatMediaType("inline", map[string]string{"filename": book.Filename}))

@@ -238,7 +238,12 @@ async function initializeReader(reader) {
       status.textContent = "Carregando livro…";
       let publication = window.ePub(fileURL);
       if (publication && typeof publication.then === "function") publication = await publication;
-      if (publication?.ready && typeof publication.ready.then === "function") await publication.ready;
+      if (publication?.ready && typeof publication.ready.then === "function") {
+        await Promise.race([
+          publication.ready,
+          new Promise((_, reject) => publication.once("openFailed", reject)),
+        ]);
+      }
       const rendition = publication.renderTo(viewport, { width: "100%", height: "100%", flow: "paginated", method: "url" });
       await rendition.display();
       status.textContent = "";
