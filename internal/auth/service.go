@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
@@ -11,6 +12,7 @@ import (
 	"net/mail"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"golang.org/x/crypto/bcrypt"
 
@@ -38,7 +40,7 @@ func (s *Service) Register(ctx context.Context, email, password string) (storage
 	if err != nil {
 		return storage.User{}, "", err
 	}
-	if len(password) < 8 || len(password) > 72 {
+	if utf8.RuneCountInString(password) < 8 || len(password) > 72 {
 		return storage.User{}, "", ErrInvalidInput
 	}
 	passwordHash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
@@ -62,8 +64,11 @@ func (s *Service) Login(ctx context.Context, email, password string) (storage.Us
 		return storage.User{}, "", ErrInvalidCredentials
 	}
 	user, passwordHash, err := s.store.FindUserByEmail(ctx, email)
-	if err != nil {
+	if errors.Is(err, sql.ErrNoRows) {
 		return storage.User{}, "", ErrInvalidCredentials
+	}
+	if err != nil {
+		return storage.User{}, "", fmt.Errorf("find user: %w", err)
 	}
 	if err := bcrypt.CompareHashAndPassword([]byte(passwordHash), []byte(password)); err != nil {
 		return storage.User{}, "", ErrInvalidCredentials
@@ -79,7 +84,14 @@ func (s *Service) UserForToken(ctx context.Context, token string) (storage.User,
 	if token == "" || len(token) > 128 {
 		return storage.User{}, ErrInvalidCredentials
 	}
-	return s.store.FindSessionUser(ctx, hashToken(token), time.Now())
+	user, err := s.store.FindSessionUser(ctx, hashToken(token), time.Now())
+	if errors.Is(err, sql.ErrNoRows) {
+		return storage.User{}, ErrInvalidCredentials
+	}
+	if err != nil {
+		return storage.User{}, fmt.Errorf("find session user: %w", err)
+	}
+	return user, nil
 }
 
 func (s *Service) Logout(ctx context.Context, token string) error {

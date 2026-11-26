@@ -6,8 +6,8 @@ import (
 	"errors"
 	"io"
 	"io/fs"
+	"mime"
 	"net/http"
-	"strings"
 
 	"github.com/Lucassimaog6/Biblioteca/internal/auth"
 	"github.com/Lucassimaog6/Biblioteca/internal/storage"
@@ -19,16 +19,17 @@ const sessionCookieName = "biblioteca_session"
 var webFiles embed.FS
 
 type Handler struct {
-	auth *auth.Service
-	web  fs.FS
+	auth          *auth.Service
+	web           fs.FS
+	secureCookies bool
 }
 
-func New(authService *auth.Service) (http.Handler, error) {
+func New(authService *auth.Service, secureCookies bool) (http.Handler, error) {
 	web, err := fs.Sub(webFiles, "web")
 	if err != nil {
 		return nil, err
 	}
-	handler := &Handler{auth: authService, web: web}
+	handler := &Handler{auth: authService, web: web, secureCookies: secureCookies}
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /", handler.home)
@@ -65,7 +66,7 @@ func (h *Handler) register(w http.ResponseWriter, r *http.Request) {
 	user, token, err := h.auth.Register(r.Context(), request.Email, request.Password)
 	switch {
 	case errors.Is(err, auth.ErrInvalidInput):
-		writeError(w, http.StatusBadRequest, "Use um e-mail válido e uma senha de 8 a 72 caracteres.")
+		writeError(w, http.StatusBadRequest, "Use um e-mail válido e uma senha de pelo menos 8 caracteres e até 72 bytes.")
 		return
 	case errors.Is(err, auth.ErrEmailExists):
 		writeError(w, http.StatusConflict, "Já existe uma conta com este e-mail.")
@@ -109,7 +110,7 @@ func (h *Handler) logout(w http.ResponseWriter, r *http.Request) {
 		Value:    "",
 		Path:     "/",
 		HttpOnly: true,
-		Secure:   r.TLS != nil,
+		Secure:   r.TLS != nil || h.secureCookies,
 		SameSite: http.SameSiteStrictMode,
 		MaxAge:   -1,
 	})
@@ -123,8 +124,12 @@ func (h *Handler) currentUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	user, err := h.auth.UserForToken(r.Context(), cookie.Value)
-	if err != nil {
+	if errors.Is(err, auth.ErrInvalidCredentials) {
 		writeError(w, http.StatusUnauthorized, "Autenticação necessária.")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Não foi possível validar a sessão.")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]storage.User{"user": user})
@@ -136,7 +141,7 @@ func (h *Handler) setSessionCookie(w http.ResponseWriter, r *http.Request, token
 		Value:    token,
 		Path:     "/",
 		HttpOnly: true,
-		Secure:   r.TLS != nil,
+		Secure:   r.TLS != nil || h.secureCookies,
 		SameSite: http.SameSiteStrictMode,
 		MaxAge:   int(auth.SessionLifetime.Seconds()),
 	})
@@ -148,7 +153,8 @@ type credentials struct {
 }
 
 func decodeJSON(w http.ResponseWriter, r *http.Request, target any) bool {
-	if !strings.HasPrefix(r.Header.Get("Content-Type"), "application/json") {
+	contentType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	if err != nil || contentType != "application/json" {
 		writeError(w, http.StatusUnsupportedMediaType, "Envie os dados no formato JSON.")
 		return false
 	}

@@ -51,8 +51,11 @@ document.addEventListener("DOMContentLoaded", () => {
   const logout = document.querySelector("[data-logout]");
   if (logout) {
     logout.addEventListener("click", async () => {
-      await fetch("/api/v1/auth/logout", { method: "POST" });
-      window.location.assign("/login");
+      try {
+        await fetch("/api/v1/auth/logout", { method: "POST" });
+      } finally {
+        window.location.assign("/login");
+      }
     });
   }
 });

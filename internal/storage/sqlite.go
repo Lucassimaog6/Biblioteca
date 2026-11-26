@@ -33,6 +33,16 @@ func Open(ctx context.Context, path string) (*Store, error) {
 	if err := os.MkdirAll(filepath.Dir(absolutePath), 0700); err != nil {
 		return nil, fmt.Errorf("create database directory: %w", err)
 	}
+	databaseFile, err := os.OpenFile(absolutePath, os.O_CREATE|os.O_RDWR, 0600)
+	if err != nil {
+		return nil, fmt.Errorf("create SQLite database file: %w", err)
+	}
+	if err := databaseFile.Close(); err != nil {
+		return nil, fmt.Errorf("close SQLite database file: %w", err)
+	}
+	if err := os.Chmod(absolutePath, 0600); err != nil {
+		return nil, fmt.Errorf("secure SQLite database file: %w", err)
+	}
 
 	databaseURL := url.URL{Scheme: "file", Path: filepath.ToSlash(absolutePath)}
 	query := databaseURL.Query()
