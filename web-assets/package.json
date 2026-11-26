@@ -4,7 +4,7 @@
   "private": true,
   "description": "Pinned browser assets for the Biblioteca web client",
   "scripts": {
-    "vendor:epub": "mkdir -p ../internal/httpapi/web/vendor && cp node_modules/epubjs/dist/epub.min.js ../internal/httpapi/web/vendor/epub.min.js && cp node_modules/epubjs/license ../internal/httpapi/web/vendor/epubjs.LICENSE"
+    "vendor:epub": "mkdir -p ../internal/httpapi/web/vendor && cp node_modules/jszip/dist/jszip.min.js ../internal/httpapi/web/vendor/jszip.min.js && cp node_modules/epubjs/dist/epub.min.js ../internal/httpapi/web/vendor/epub.min.js && cp node_modules/epubjs/license ../internal/httpapi/web/vendor/epubjs.LICENSE"
   },
   "dependencies": {
     "epubjs": "0.3.93"
