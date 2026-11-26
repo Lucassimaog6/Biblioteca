@@ -27,17 +27,17 @@ type User struct {
 }
 
 type Book struct {
-	ID               int64     `json:"id"`
-	Title            string    `json:"title"`
-	Author           string    `json:"author"`
-	Description      string    `json:"description"`
-	Filename         string    `json:"filename"`
-	FileSize         int64     `json:"file_size"`
-	CreatedAt        time.Time `json:"created_at"`
-	UpdatedAt        time.Time `json:"updated_at"`
-	CanEdit          bool      `json:"can_edit"`
-	OwnerID          int64     `json:"-"`
-	FileKey          string    `json:"-"`
+	ID          int64     `json:"id"`
+	Title       string    `json:"title"`
+	Author      string    `json:"author"`
+	Description string    `json:"description"`
+	Filename    string    `json:"filename"`
+	FileSize    int64     `json:"file_size"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+	CanEdit     bool      `json:"can_edit"`
+	OwnerID     int64     `json:"-"`
+	FileKey     string    `json:"-"`
 }
 
 type Store struct {
@@ -183,7 +183,7 @@ func (s *Store) ListBooks(ctx context.Context, viewerID int64) ([]Book, error) {
 }
 
 func (s *Store) FindBookForEdit(ctx context.Context, id, ownerID int64) (Book, error) {
-	book, err := s.findBook(ctx, id)
+	book, err := s.FindBook(ctx, id)
 	if err != nil {
 		return Book{}, err
 	}
@@ -193,30 +193,7 @@ func (s *Store) FindBookForEdit(ctx context.Context, id, ownerID int64) (Book, e
 	return book, nil
 }
 
-func (s *Store) UpdateBook(ctx context.Context, book Book, expectedFileKey string) (Book, error) {
-	now := time.Now().UTC()
-	result, err := s.db.ExecContext(ctx,
-		`UPDATE books
-		 SET title = ?, author = ?, description = ?, filename = ?, file_key = ?, file_size = ?, updated_at = ?
-		 WHERE id = ? AND owner_id = ? AND file_key = ?`,
-		book.Title, book.Author, book.Description, book.Filename, book.FileKey, book.FileSize,
-		now.Format(time.RFC3339Nano), book.ID, book.OwnerID, expectedFileKey,
-	)
-	if err != nil {
-		return Book{}, fmt.Errorf("update book: %w", err)
-	}
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return Book{}, fmt.Errorf("check book update: %w", err)
-	}
-	if rowsAffected == 0 {
-		return Book{}, ErrBookChanged
-	}
-	book.UpdatedAt = now
-	return book, nil
-}
-
-func (s *Store) findBook(ctx context.Context, id int64) (Book, error) {
+func (s *Store) FindBook(ctx context.Context, id int64) (Book, error) {
 	var book Book
 	var createdAt, updatedAt string
 	err := s.db.QueryRowContext(ctx,
@@ -241,6 +218,29 @@ func (s *Store) findBook(ctx context.Context, id int64) (Book, error) {
 	if err != nil {
 		return Book{}, fmt.Errorf("parse book update time: %w", err)
 	}
+	return book, nil
+}
+
+func (s *Store) UpdateBook(ctx context.Context, book Book, expectedFileKey string) (Book, error) {
+	now := time.Now().UTC()
+	result, err := s.db.ExecContext(ctx,
+		`UPDATE books
+		 SET title = ?, author = ?, description = ?, filename = ?, file_key = ?, file_size = ?, updated_at = ?
+		 WHERE id = ? AND owner_id = ? AND file_key = ?`,
+		book.Title, book.Author, book.Description, book.Filename, book.FileKey, book.FileSize,
+		now.Format(time.RFC3339Nano), book.ID, book.OwnerID, expectedFileKey,
+	)
+	if err != nil {
+		return Book{}, fmt.Errorf("update book: %w", err)
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return Book{}, fmt.Errorf("check book update: %w", err)
+	}
+	if rowsAffected == 0 {
+		return Book{}, ErrBookChanged
+	}
+	book.UpdatedAt = now
 	return book, nil
 }
 

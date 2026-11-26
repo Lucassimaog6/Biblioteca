@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Leitura · Biblioteca</title>
+  <link rel="stylesheet" href="/assets/app.css">
+  <script src="/assets/vendor/epub.min.js" nonce="{{CSP_NONCE}}" defer></script>
+  <script src="/assets/app.js" nonce="{{CSP_NONCE}}" defer></script>
+</head>
+<body class="reader-page">
+  <header class="reader-topbar">
+    <a class="brand" href="/dashboard">Biblioteca<span>.</span></a>
+    <a class="button-quiet" href="/dashboard">Voltar à estante</a>
+  </header>
+  <main class="reader-main" data-reader>
+    <div class="reader-heading">
+      <div>
+        <p class="eyebrow">LEITURA</p>
+        <h1 data-reader-title>Carregando…</h1>
+      </div>
+      <p class="reader-status" data-reader-status role="status" aria-live="polite"></p>
+    </div>
+    <nav class="reader-controls" data-epub-controls hidden aria-label="Controles de leitura">
+      <button class="button-quiet" data-previous-page type="button">← Página anterior</button>
+      <button class="button-quiet" data-next-page type="button">Próxima página →</button>
+    </nav>
+    <section class="epub-viewport" data-epub-viewport hidden aria-label="Conteúdo do livro"></section>
+    <iframe class="pdf-viewer" data-pdf-viewer title="Leitor de PDF" hidden></iframe>
+  </main>
+</body>
+</html>

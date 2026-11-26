@@ -11,14 +11,13 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 	"unicode/utf8"
 
 	"github.com/Lucassimaog6/Biblioteca/internal/storage"
 )
 
 var (
-	ErrInvalidBook = errors.New("invalid book")
+	ErrInvalidBook  = errors.New("invalid book")
 	ErrFileTooLarge = errors.New("book file exceeds the upload limit")
 )
 
@@ -48,6 +47,31 @@ func NewService(store *storage.Store, directory string) (*Service, error) {
 
 func (s *Service) List(ctx context.Context, viewerID int64) ([]storage.Book, error) {
 	return s.store.ListBooks(ctx, viewerID)
+}
+
+func (s *Service) Get(ctx context.Context, id, viewerID int64) (storage.Book, error) {
+	book, err := s.store.FindBook(ctx, id)
+	if err != nil {
+		return storage.Book{}, err
+	}
+	book.CanEdit = book.OwnerID == viewerID
+	return book, nil
+}
+
+func (s *Service) OpenFile(ctx context.Context, id int64) (storage.Book, *os.File, error) {
+	book, err := s.store.FindBook(ctx, id)
+	if err != nil {
+		return storage.Book{}, nil, err
+	}
+	path, err := s.filePath(book.FileKey)
+	if err != nil {
+		return storage.Book{}, nil, fmt.Errorf("resolve stored book file: %w", err)
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		return storage.Book{}, nil, fmt.Errorf("open stored book file: %w", err)
+	}
+	return book, file, nil
 }
 
 func (s *Service) Create(ctx context.Context, ownerID int64, metadata Metadata, filename string, source io.Reader) (storage.Book, error) {
@@ -213,20 +237,4 @@ func (s *Service) filePath(key string) (string, error) {
 		return "", ErrInvalidBook
 	}
 	return path, nil
-}
-
-func IsNotFound(err error) bool {
-	return errors.Is(err, storage.ErrBookNotFound)
-}
-
-func IsNotOwned(err error) bool {
-	return errors.Is(err, storage.ErrBookNotOwned)
-}
-
-func IsChanged(err error) bool {
-	return errors.Is(err, storage.ErrBookChanged)
-}
-
-func Now() time.Time {
-	return time.Now().UTC()
 }

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/Lucassimaog6/Biblioteca/internal/auth"
+	"github.com/Lucassimaog6/Biblioteca/internal/books"
 	"github.com/Lucassimaog6/Biblioteca/internal/httpapi"
 	"github.com/Lucassimaog6/Biblioteca/internal/storage"
 )
@@ -25,6 +26,7 @@ func main() {
 func run() error {
 	address := envOrDefault("BIBLIOTECA_ADDR", ":8080")
 	databasePath := envOrDefault("BIBLIOTECA_DB_PATH", "data/biblioteca.db")
+	booksDirectory := envOrDefault("BIBLIOTECA_BOOKS_DIR", "data/books")
 	secureCookies := os.Getenv("BIBLIOTECA_COOKIE_SECURE") == "1"
 
 	store, err := storage.Open(context.Background(), databasePath)
@@ -33,7 +35,11 @@ func run() error {
 	}
 	defer store.Close()
 
-	handler, err := httpapi.New(auth.NewService(store), secureCookies)
+	bookService, err := books.NewService(store, booksDirectory)
+	if err != nil {
+		return err
+	}
+	handler, err := httpapi.New(auth.NewService(store), bookService, secureCookies)
 	if err != nil {
 		return fmt.Errorf("configure HTTP handler: %w", err)
 	}

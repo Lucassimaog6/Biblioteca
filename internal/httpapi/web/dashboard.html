@@ -15,12 +15,42 @@
   <main class="dashboard">
     <p class="eyebrow">SUA BIBLIOTECA PESSOAL</p>
     <h1>Olá, <span data-user-email>leitor</span>.</h1>
-    <p class="muted">Este é o começo da sua próxima grande leitura.</p>
-    <section class="empty-state">
-      <div class="book-mark" aria-hidden="true">▤</div>
-      <h2>Sua estante está esperando</h2>
-      <p>Em breve, você poderá organizar seus livros e acompanhar seu progresso de leitura por aqui.</p>
+    <div class="catalog-heading">
+      <div>
+        <h2>Minha estante</h2>
+        <p class="muted">Livros disponíveis na plataforma.</p>
+      </div>
+      <button class="primary-button" data-new-book type="button">＋ Enviar livro</button>
+    </div>
+    <p class="catalog-message" data-catalog-message role="status" aria-live="polite"></p>
+    <section class="book-list" data-book-list aria-live="polite">
+      <p class="muted">Carregando livros…</p>
     </section>
   </main>
+  <dialog class="book-dialog" data-book-dialog>
+    <form data-book-form>
+      <div class="dialog-heading">
+        <div>
+          <p class="eyebrow">BIBLIOTECA</p>
+          <h2 data-dialog-title>Enviar livro</h2>
+        </div>
+        <button class="dialog-close" data-close-dialog type="button" aria-label="Fechar">×</button>
+      </div>
+      <label for="book-title">Título</label>
+      <input id="book-title" name="title" type="text" maxlength="250" required>
+      <label for="book-author">Autor</label>
+      <input id="book-author" name="author" type="text" maxlength="250">
+      <label for="book-description">Descrição</label>
+      <textarea id="book-description" name="description" rows="3" maxlength="5000"></textarea>
+      <label for="book-file" data-file-label>Arquivo do livro</label>
+      <input id="book-file" name="file" type="file" data-book-file required>
+      <p class="help" data-file-help>Envie um arquivo de até 100 MiB. EPUB e PDF podem ser lidos no navegador.</p>
+      <p class="form-error" data-book-error role="alert" aria-live="polite"></p>
+      <div class="dialog-actions">
+        <button class="button-quiet" data-close-dialog type="button">Cancelar</button>
+        <button class="primary-button" type="submit">Salvar livro</button>
+      </div>
+    </form>
+  </dialog>
 </body>
 </html>
