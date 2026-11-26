@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Início · Biblioteca</title>
+  <link rel="stylesheet" href="/assets/app.css">
+  <script src="/assets/app.js" defer></script>
+</head>
+<body class="dashboard-page">
+  <header class="topbar">
+    <a class="brand" href="/dashboard">Biblioteca<span>.</span></a>
+    <button class="button-quiet" data-logout type="button">Sair</button>
+  </header>
+  <main class="dashboard">
+    <p class="eyebrow">SUA BIBLIOTECA PESSOAL</p>
+    <h1>Olá, <span data-user-email>leitor</span>.</h1>
+    <div class="catalog-heading">
+      <div>
+        <h2>Minha estante</h2>
+        <p class="muted">Livros disponíveis na plataforma.</p>
+      </div>
+      <button class="primary-button" data-new-book type="button">＋ Enviar livro</button>
+    </div>
+    <p class="catalog-message" data-catalog-message role="status" aria-live="polite"></p>
+    <section class="book-list" data-book-list aria-live="polite">
+      <p class="muted">Carregando livros…</p>
+    </section>
+  </main>
+  <dialog class="book-dialog" data-book-dialog>
+    <form data-book-form>
+      <div class="dialog-heading">
+        <div>
+          <p class="eyebrow">BIBLIOTECA</p>
+          <h2 data-dialog-title>Enviar livro</h2>
+        </div>
+        <button class="dialog-close" data-close-dialog type="button" aria-label="Fechar">×</button>
+      </div>
+      <label for="book-title">Título</label>
+      <input id="book-title" name="title" type="text" maxlength="250" required>
+      <label for="book-author">Autor</label>
+      <input id="book-author" name="author" type="text" maxlength="250">
+      <label for="book-description">Descrição</label>
+      <textarea id="book-description" name="description" rows="3" maxlength="5000"></textarea>
+      <label for="book-file" data-file-label>Arquivo do livro</label>
+      <input id="book-file" name="file" type="file" data-book-file required>
+      <p class="help" data-file-help>Envie um arquivo de até 100 MiB. EPUB e PDF podem ser lidos no navegador.</p>
+      <p class="form-error" data-book-error role="alert" aria-live="polite"></p>
+      <div class="dialog-actions">
+        <button class="button-quiet" data-close-dialog type="button">Cancelar</button>
+        <button class="primary-button" type="submit">Salvar livro</button>
+      </div>
+    </form>
+  </dialog>
+</body>
+</html>
