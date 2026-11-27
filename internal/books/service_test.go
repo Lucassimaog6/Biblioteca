@@ -3,6 +3,7 @@ package books
 import (
 	"context"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -104,5 +105,60 @@ func TestCreateRejectsEmptyFileAndInvalidMetadata(t *testing.T) {
 	}
 	if _, err := service.Create(ctx, user.ID, Metadata{Title: "Book"}, "book.epub", strings.NewReader("")); !errors.Is(err, ErrInvalidBook) {
 		t.Fatalf("empty file error = %v, want ErrInvalidBook", err)
+	}
+}
+
+func TestBookMetadataAndCoverArePersisted(t *testing.T) {
+	ctx := context.Background()
+	store, err := storage.Open(ctx, filepath.Join(t.TempDir(), "books.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	directory := filepath.Join(t.TempDir(), "files")
+	service, err := NewService(store, directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	user, err := store.CreateUser(ctx, "cover@example.com", "password hash")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cover := []byte{0xff, 0xd8, 0xff, 0xd9}
+	book, err := service.Create(ctx, user.ID, Metadata{
+		Title: "Book", Publisher: "Publisher", PublishedDate: "2025", ISBN: "9780000000000",
+		Language: "en", PageCount: 123, Categories: []string{"Fiction"},
+		MetadataSource: "google_books", MetadataID: "external-id", CoverImage: cover, CoverChanged: true,
+	}, "book.epub", strings.NewReader("book contents"))
+	if err != nil {
+		t.Fatalf("create book with metadata and cover: %v", err)
+	}
+	if !book.HasCover || book.Publisher != "Publisher" || book.PageCount != 123 ||
+		len(book.Categories) != 1 || book.Categories[0] != "Fiction" || book.MetadataID != "external-id" {
+		t.Fatalf("unexpected stored book: %+v", book)
+	}
+	storedBook, coverFile, contentType, err := service.OpenCover(ctx, book.ID)
+	if err != nil {
+		t.Fatalf("open saved cover: %v", err)
+	}
+	defer coverFile.Close()
+	coverBytes, err := io.ReadAll(coverFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if storedBook.ID != book.ID || contentType != "image/jpeg" || string(coverBytes) != string(cover) {
+		t.Fatalf("cover response book=%d type=%q bytes=%v", storedBook.ID, contentType, coverBytes)
+	}
+
+	updated, err := service.Update(ctx, book.ID, user.ID, Metadata{
+		Title: "Updated", Publisher: "Publisher", PublishedDate: "2025", ISBN: "9780000000000",
+		Language: "en", PageCount: 123, Categories: []string{"Fiction"},
+		MetadataSource: "google_books", MetadataID: "external-id",
+	}, "", nil)
+	if err != nil {
+		t.Fatalf("update book without selecting a new cover: %v", err)
+	}
+	if !updated.HasCover {
+		t.Fatal("metadata-only update should retain the existing cover")
 	}
 }

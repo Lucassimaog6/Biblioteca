@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/url"
@@ -27,17 +28,27 @@ type User struct {
 }
 
 type Book struct {
-	ID          int64     `json:"id"`
-	Title       string    `json:"title"`
-	Author      string    `json:"author"`
-	Description string    `json:"description"`
-	Filename    string    `json:"filename"`
-	FileSize    int64     `json:"file_size"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
-	CanEdit     bool      `json:"can_edit"`
-	OwnerID     int64     `json:"-"`
-	FileKey     string    `json:"-"`
+	ID             int64     `json:"id"`
+	Title          string    `json:"title"`
+	Author         string    `json:"author"`
+	Description    string    `json:"description"`
+	Publisher      string    `json:"publisher"`
+	PublishedDate  string    `json:"published_date"`
+	ISBN           string    `json:"isbn"`
+	Language       string    `json:"language"`
+	PageCount      int       `json:"page_count"`
+	Categories     []string  `json:"categories"`
+	MetadataSource string    `json:"metadata_source"`
+	MetadataID     string    `json:"metadata_id"`
+	Filename       string    `json:"filename"`
+	FileSize       int64     `json:"file_size"`
+	HasCover       bool      `json:"has_cover"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
+	CanEdit        bool      `json:"can_edit"`
+	OwnerID        int64     `json:"-"`
+	FileKey        string    `json:"-"`
+	CoverKey       string    `json:"-"`
 }
 
 type Store struct {
@@ -111,8 +122,17 @@ func (s *Store) initialize(ctx context.Context) error {
 			title TEXT NOT NULL,
 			author TEXT NOT NULL DEFAULT '',
 			description TEXT NOT NULL DEFAULT '',
+			publisher TEXT NOT NULL DEFAULT '',
+			published_date TEXT NOT NULL DEFAULT '',
+			isbn TEXT NOT NULL DEFAULT '',
+			language TEXT NOT NULL DEFAULT '',
+			page_count INTEGER NOT NULL DEFAULT 0,
+			categories TEXT NOT NULL DEFAULT '[]',
+			metadata_source TEXT NOT NULL DEFAULT '',
+			metadata_id TEXT NOT NULL DEFAULT '',
 			filename TEXT NOT NULL,
 			file_key TEXT NOT NULL,
+			cover_key TEXT NOT NULL DEFAULT '',
 			file_size INTEGER NOT NULL,
 			created_at TEXT NOT NULL,
 			updated_at TEXT NOT NULL
@@ -122,15 +142,75 @@ func (s *Store) initialize(ctx context.Context) error {
 	if _, err := s.db.ExecContext(ctx, schema); err != nil {
 		return fmt.Errorf("initialize SQLite schema: %w", err)
 	}
+	migrations := []struct {
+		name       string
+		definition string
+	}{
+		{"publisher", "TEXT NOT NULL DEFAULT ''"},
+		{"published_date", "TEXT NOT NULL DEFAULT ''"},
+		{"isbn", "TEXT NOT NULL DEFAULT ''"},
+		{"language", "TEXT NOT NULL DEFAULT ''"},
+		{"page_count", "INTEGER NOT NULL DEFAULT 0"},
+		{"categories", "TEXT NOT NULL DEFAULT '[]'"},
+		{"metadata_source", "TEXT NOT NULL DEFAULT ''"},
+		{"metadata_id", "TEXT NOT NULL DEFAULT ''"},
+		{"cover_key", "TEXT NOT NULL DEFAULT ''"},
+	}
+	for _, migration := range migrations {
+		if err := s.addBookColumn(ctx, migration.name, migration.definition); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Store) addBookColumn(ctx context.Context, name, definition string) error {
+	rows, err := s.db.QueryContext(ctx, `PRAGMA table_info(books)`)
+	if err != nil {
+		return fmt.Errorf("inspect books schema: %w", err)
+	}
+	found := false
+	for rows.Next() {
+		var cid, notNull, primaryKey int
+		var columnName, columnType string
+		var defaultValue sql.NullString
+		if err := rows.Scan(&cid, &columnName, &columnType, &notNull, &defaultValue, &primaryKey); err != nil {
+			rows.Close()
+			return fmt.Errorf("read books schema: %w", err)
+		}
+		if columnName == name {
+			found = true
+		}
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return fmt.Errorf("iterate books schema: %w", err)
+	}
+	if err := rows.Close(); err != nil {
+		return fmt.Errorf("close books schema: %w", err)
+	}
+	if found {
+		return nil
+	}
+	if _, err := s.db.ExecContext(ctx, `ALTER TABLE books ADD COLUMN `+name+` `+definition); err != nil {
+		return fmt.Errorf("add books column %s: %w", name, err)
+	}
 	return nil
 }
 
 func (s *Store) CreateBook(ctx context.Context, book Book) (Book, error) {
 	now := time.Now().UTC()
+	categories, err := json.Marshal(book.Categories)
+	if err != nil {
+		return Book{}, fmt.Errorf("encode book categories: %w", err)
+	}
 	result, err := s.db.ExecContext(ctx,
-		`INSERT INTO books (owner_id, title, author, description, filename, file_key, file_size, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		book.OwnerID, book.Title, book.Author, book.Description, book.Filename, book.FileKey, book.FileSize,
+		`INSERT INTO books (owner_id, title, author, description, publisher, published_date, isbn, language, page_count, categories,
+		 metadata_source, metadata_id, filename, file_key, cover_key, file_size, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		book.OwnerID, book.Title, book.Author, book.Description, book.Publisher, book.PublishedDate, book.ISBN,
+		book.Language, book.PageCount, string(categories), book.MetadataSource, book.MetadataID,
+		book.Filename, book.FileKey, book.CoverKey, book.FileSize,
 		now.Format(time.RFC3339Nano), now.Format(time.RFC3339Nano),
 	)
 	if err != nil {
@@ -142,12 +222,14 @@ func (s *Store) CreateBook(ctx context.Context, book Book) (Book, error) {
 	}
 	book.CreatedAt = now
 	book.UpdatedAt = now
+	book.HasCover = book.CoverKey != ""
 	return book, nil
 }
 
 func (s *Store) ListBooks(ctx context.Context, viewerID int64) ([]Book, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT id, owner_id, title, author, description, filename, file_key, file_size, created_at, updated_at
+		`SELECT id, owner_id, title, author, description, publisher, published_date, isbn, language, page_count, categories,
+		 metadata_source, metadata_id, filename, file_key, cover_key, file_size, created_at, updated_at
 		 FROM books ORDER BY title COLLATE NOCASE, id`,
 	)
 	if err != nil {
@@ -158,13 +240,19 @@ func (s *Store) ListBooks(ctx context.Context, viewerID int64) ([]Book, error) {
 	books := make([]Book, 0)
 	for rows.Next() {
 		var book Book
-		var createdAt, updatedAt string
+		var createdAt, updatedAt, categories string
 		if err := rows.Scan(
 			&book.ID, &book.OwnerID, &book.Title, &book.Author, &book.Description,
-			&book.Filename, &book.FileKey, &book.FileSize, &createdAt, &updatedAt,
+			&book.Publisher, &book.PublishedDate, &book.ISBN, &book.Language, &book.PageCount, &categories,
+			&book.MetadataSource, &book.MetadataID, &book.Filename, &book.FileKey, &book.CoverKey,
+			&book.FileSize, &createdAt, &updatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("read book row: %w", err)
 		}
+		if err := json.Unmarshal([]byte(categories), &book.Categories); err != nil {
+			return nil, fmt.Errorf("decode book categories: %w", err)
+		}
+		book.HasCover = book.CoverKey != ""
 		book.CreatedAt, err = time.Parse(time.RFC3339Nano, createdAt)
 		if err != nil {
 			return nil, fmt.Errorf("parse book creation time: %w", err)
@@ -195,14 +283,17 @@ func (s *Store) FindBookForEdit(ctx context.Context, id, ownerID int64) (Book, e
 
 func (s *Store) FindBook(ctx context.Context, id int64) (Book, error) {
 	var book Book
-	var createdAt, updatedAt string
+	var createdAt, updatedAt, categories string
 	err := s.db.QueryRowContext(ctx,
-		`SELECT id, owner_id, title, author, description, filename, file_key, file_size, created_at, updated_at
+		`SELECT id, owner_id, title, author, description, publisher, published_date, isbn, language, page_count, categories,
+		 metadata_source, metadata_id, filename, file_key, cover_key, file_size, created_at, updated_at
 		 FROM books WHERE id = ?`,
 		id,
 	).Scan(
 		&book.ID, &book.OwnerID, &book.Title, &book.Author, &book.Description,
-		&book.Filename, &book.FileKey, &book.FileSize, &createdAt, &updatedAt,
+		&book.Publisher, &book.PublishedDate, &book.ISBN, &book.Language, &book.PageCount, &categories,
+		&book.MetadataSource, &book.MetadataID, &book.Filename, &book.FileKey, &book.CoverKey,
+		&book.FileSize, &createdAt, &updatedAt,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Book{}, ErrBookNotFound
@@ -210,6 +301,10 @@ func (s *Store) FindBook(ctx context.Context, id int64) (Book, error) {
 	if err != nil {
 		return Book{}, fmt.Errorf("find book: %w", err)
 	}
+	if err := json.Unmarshal([]byte(categories), &book.Categories); err != nil {
+		return Book{}, fmt.Errorf("decode book categories: %w", err)
+	}
+	book.HasCover = book.CoverKey != ""
 	book.CreatedAt, err = time.Parse(time.RFC3339Nano, createdAt)
 	if err != nil {
 		return Book{}, fmt.Errorf("parse book creation time: %w", err)
@@ -223,12 +318,19 @@ func (s *Store) FindBook(ctx context.Context, id int64) (Book, error) {
 
 func (s *Store) UpdateBook(ctx context.Context, book Book, expectedFileKey string) (Book, error) {
 	now := time.Now().UTC()
+	categories, err := json.Marshal(book.Categories)
+	if err != nil {
+		return Book{}, fmt.Errorf("encode book categories: %w", err)
+	}
 	result, err := s.db.ExecContext(ctx,
 		`UPDATE books
-		 SET title = ?, author = ?, description = ?, filename = ?, file_key = ?, file_size = ?, updated_at = ?
+		 SET title = ?, author = ?, description = ?, publisher = ?, published_date = ?, isbn = ?, language = ?,
+		 page_count = ?, categories = ?, metadata_source = ?, metadata_id = ?, filename = ?, file_key = ?,
+		 cover_key = ?, file_size = ?, updated_at = ?
 		 WHERE id = ? AND owner_id = ? AND file_key = ?`,
-		book.Title, book.Author, book.Description, book.Filename, book.FileKey, book.FileSize,
-		now.Format(time.RFC3339Nano), book.ID, book.OwnerID, expectedFileKey,
+		book.Title, book.Author, book.Description, book.Publisher, book.PublishedDate, book.ISBN, book.Language,
+		book.PageCount, string(categories), book.MetadataSource, book.MetadataID, book.Filename, book.FileKey,
+		book.CoverKey, book.FileSize, now.Format(time.RFC3339Nano), book.ID, book.OwnerID, expectedFileKey,
 	)
 	if err != nil {
 		return Book{}, fmt.Errorf("update book: %w", err)
@@ -241,6 +343,7 @@ func (s *Store) UpdateBook(ctx context.Context, book Book, expectedFileKey strin
 		return Book{}, ErrBookChanged
 	}
 	book.UpdatedAt = now
+	book.HasCover = book.CoverKey != ""
 	return book, nil
 }
 

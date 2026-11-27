@@ -5,7 +5,7 @@ Biblioteca é um projeto de biblioteca digital pessoal. A proposta é oferecer u
 ## Escopo planejado
 
 - Backend em Go, com foco em desempenho.
-- Livros armazenados no sistema de arquivos, com um arquivo por livro.
+- Arquivo de conteúdo de cada livro armazenado no sistema de arquivos; capas são imagens opcionais associadas.
 - Metadados enriquecidos por fontes de terceiros, com possibilidade de edição pelos usuários.
 - Upload de livros pelos usuários.
 - Salvamento automático do progresso de leitura.
@@ -20,7 +20,7 @@ A aplicação inicial inclui cadastro, login, logout, catálogo compartilhado e 
 
 Contas e sessões são armazenadas em SQLite no arquivo `data/biblioteca.db` por padrão. As senhas são armazenadas com hash bcrypt e os tokens de sessão são aleatórios, enviados em cookie `HttpOnly` e persistidos no banco apenas como hash. A criação de contas está aberta nesta primeira versão; não há recuperação de senha.
 
-Os metadados dos livros ficam no SQLite; cada livro tem exatamente um arquivo no diretório `data/books`. O catálogo é visível para todas as contas autenticadas, mas só quem enviou um livro pode editar seus metadados ou substituir seu arquivo. Uploads aceitam arquivos de até 100 MiB sem restringir o formato; a leitura no navegador oferece EPUB (epub.js) e PDF (visualizador integrado do navegador). Outros formatos permanecem armazenados, mas ainda não têm leitor na aplicação.
+Os metadados dos livros ficam no SQLite; cada livro tem um arquivo de conteúdo no diretório `data/books` e pode ter uma imagem de capa adicional no mesmo diretório. A busca por metadados consulta Google Books e Open Library; os resultados podem preencher título, autor, descrição, editora, data de publicação, ISBN, idioma, páginas e categorias. Capas selecionadas são baixadas e guardadas localmente. Os provedores são opcionais e, se estiverem indisponíveis, os metadados continuam editáveis manualmente. O catálogo é visível para todas as contas autenticadas, mas só quem enviou um livro pode editar seus metadados ou substituir seu arquivo. Uploads aceitam arquivos de até 100 MiB sem restringir o formato; a leitura no navegador oferece EPUB (epub.js) e PDF (visualizador integrado do navegador). Outros formatos permanecem armazenados, mas ainda não têm leitor na aplicação.
 
 ### Executar localmente
 
@@ -60,12 +60,14 @@ Abra `http://localhost:8080`. Para parar a aplicação, use `docker compose down
 - `POST /api/v1/auth/logout` — encerra a sessão atual.
 - `GET /api/v1/auth/me` — retorna a conta autenticada.
 - `GET /api/v1/books` — lista todos os livros e informa `can_edit` para o usuário atual.
+- `GET /api/v1/books/metadata/search?query={title}` — pesquisa resultados no Google Books e Open Library; requer sessão.
 - `POST /api/v1/books` — envia metadados e um arquivo com `multipart/form-data`.
 - `GET /api/v1/books/{id}` — consulta os metadados de um livro.
 - `PUT /api/v1/books/{id}` — atualiza metadados e, opcionalmente, substitui o arquivo; apenas o proprietário pode editar.
 - `GET /api/v1/books/{id}/file` — transmite o arquivo autenticado para o leitor do navegador.
+- `GET /api/v1/books/{id}/cover` — transmite a capa armazenada para usuários autenticados.
 
-Os metadados enviados são `title`, `author` e `description`; o arquivo usa o campo `file`. Respostas e erros da API usam JSON. O cookie de sessão é `HttpOnly` e `SameSite=Strict`; senha deve ter ao menos 8 caracteres e no máximo 72 bytes.
+Os campos de metadados incluem `title`, `author`, `description`, `publisher`, `published_date`, `isbn`, `language`, `page_count` e `categories`. O cliente pode enviar `provider`, `provider_id`, `cover_url` e `metadata_selected` para associar os metadados e solicitar o download de uma capa selecionada. O arquivo do livro usa o campo `file`. Respostas e erros da API usam JSON. O cookie de sessão é `HttpOnly` e `SameSite=Strict`; senha deve ter ao menos 8 caracteres e no máximo 72 bytes.
 
 ### Leitor EPUB e dependências web
 

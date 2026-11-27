@@ -210,6 +210,98 @@ func TestRegistrationAndAuthenticatedDashboardFlow(t *testing.T) {
 	}
 }
 
+func TestMetadataSearchRequiresAuthenticationAndValidQuery(t *testing.T) {
+	store, err := storage.Open(context.Background(), filepath.Join(t.TempDir(), "users.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	bookService, err := books.NewService(store, filepath.Join(t.TempDir(), "books"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler, err := New(auth.NewService(store), bookService, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	unauthorized := httptest.NewRecorder()
+	handler.ServeHTTP(unauthorized, httptest.NewRequest(http.MethodGet, "/api/v1/books/metadata/search?query=Book", nil))
+	if unauthorized.Code != http.StatusUnauthorized {
+		t.Fatalf("unauthorized search status = %d", unauthorized.Code)
+	}
+	cookie := registerTestUser(t, handler, "metadata@example.com")
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/books/metadata/search?query=%20%20", nil)
+	request.AddCookie(cookie)
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("empty metadata search status = %d, body=%s", response.Code, response.Body.String())
+	}
+}
+
+func TestBookCoverEndpointServesStoredImage(t *testing.T) {
+	store, err := storage.Open(context.Background(), filepath.Join(t.TempDir(), "users.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	bookService, err := books.NewService(store, filepath.Join(t.TempDir(), "books"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler, err := New(auth.NewService(store), bookService, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cookie := registerTestUser(t, handler, "cover@example.com")
+	user, _, err := store.FindUserByEmail(context.Background(), "cover@example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cover := []byte{0xff, 0xd8, 0xff, 0xd9}
+	book, err := bookService.Create(context.Background(), user.ID, books.Metadata{
+		Title: "Book", CoverImage: cover, CoverChanged: true,
+	}, "book.epub", strings.NewReader("book contents"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/v1/books/%d/cover", book.ID), nil)
+	request.AddCookie(cookie)
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || response.Header().Get("Content-Type") != "image/jpeg" ||
+		response.Body.String() != string(cover) {
+		t.Fatalf("cover response status=%d type=%q body=%v", response.Code, response.Header().Get("Content-Type"), response.Body.Bytes())
+	}
+}
+
+func TestSelectingMetadataWithoutCoverPreservesCover(t *testing.T) {
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	for name, value := range map[string]string{
+		"title": "Book", "provider": "open_library", "provider_id": "/works/OL1W",
+		"cover_url": "", "metadata_selected": "true", "page_count": "",
+	} {
+		if err := writer.WriteField(name, value); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(http.MethodPut, "/api/v1/books/1", &body)
+	request.Header.Set("Content-Type", writer.FormDataContentType())
+	response := httptest.NewRecorder()
+	metadata, file, _, ok := parseBookUpload(response, request, false)
+	if !ok {
+		t.Fatalf("parse selected metadata: status=%d body=%s", response.Code, response.Body.String())
+	}
+	if file != nil || metadata.CoverChanged || metadata.MetadataSource != "open_library" {
+		t.Fatalf("metadata selection without a cover should preserve the current cover: %+v", metadata)
+	}
+}
+
 func registerTestUser(t *testing.T, handler http.Handler, email string) *http.Cookie {
 	t.Helper()
 	request := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register",
@@ -228,6 +320,9 @@ func performBookRequest(t *testing.T, handler http.Handler, method, path string,
 	var body bytes.Buffer
 	writer := multipart.NewWriter(&body)
 	_ = writer.WriteField("title", title)
+	_ = writer.WriteField("page_count", "")
+	_ = writer.WriteField("categories", "[]")
+	_ = writer.WriteField("metadata_selected", "false")
 	if author != "" {
 		_ = writer.WriteField("author", author)
 	}
