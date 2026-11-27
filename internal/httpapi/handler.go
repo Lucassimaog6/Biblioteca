@@ -13,11 +13,13 @@ import (
 	"mime"
 	"mime/multipart"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 
 	"github.com/Lucassimaog6/Biblioteca/internal/auth"
+	"github.com/Lucassimaog6/Biblioteca/internal/bookmetadata"
 	"github.com/Lucassimaog6/Biblioteca/internal/books"
 	"github.com/Lucassimaog6/Biblioteca/internal/storage"
 )
@@ -30,16 +32,21 @@ var webFiles embed.FS
 type Handler struct {
 	auth          *auth.Service
 	books         *books.Service
+	metadata      *bookmetadata.Service
 	web           fs.FS
 	secureCookies bool
 }
 
-func New(authService *auth.Service, bookService *books.Service, secureCookies bool) (http.Handler, error) {
+func New(authService *auth.Service, bookService *books.Service, secureCookies bool, metadataServices ...*bookmetadata.Service) (http.Handler, error) {
 	web, err := fs.Sub(webFiles, "web")
 	if err != nil {
 		return nil, err
 	}
-	handler := &Handler{auth: authService, books: bookService, web: web, secureCookies: secureCookies}
+	metadataService := bookmetadata.NewService()
+	if len(metadataServices) > 0 && metadataServices[0] != nil {
+		metadataService = metadataServices[0]
+	}
+	handler := &Handler{auth: authService, books: bookService, metadata: metadataService, web: web, secureCookies: secureCookies}
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /", handler.home)
@@ -54,9 +61,11 @@ func New(authService *auth.Service, bookService *books.Service, secureCookies bo
 	mux.HandleFunc("POST /api/v1/auth/logout", handler.logout)
 	mux.HandleFunc("GET /api/v1/auth/me", handler.currentUser)
 	mux.HandleFunc("GET /api/v1/books", handler.listBooks)
+	mux.HandleFunc("GET /api/v1/books/metadata/search", handler.searchBookMetadata)
 	mux.HandleFunc("POST /api/v1/books", handler.createBook)
 	mux.HandleFunc("GET /api/v1/books/{id}", handler.getBook)
 	mux.HandleFunc("PUT /api/v1/books/{id}", handler.updateBook)
+	mux.HandleFunc("GET /api/v1/books/{id}/cover", handler.bookCover)
 	mux.HandleFunc("GET /api/v1/books/{id}/file", handler.bookFile)
 	mux.HandleFunc("GET /api/v1/books/{id}/file/{filename}", handler.bookFile)
 
@@ -199,6 +208,27 @@ func (h *Handler) listBooks(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"books": list})
 }
 
+func (h *Handler) searchBookMetadata(w http.ResponseWriter, r *http.Request) {
+	if _, ok := h.authenticatedUser(w, r); !ok {
+		return
+	}
+	query := strings.TrimSpace(r.URL.Query().Get("query"))
+	if query == "" || len(query) > 200 {
+		writeError(w, http.StatusBadRequest, "Informe um título de até 200 caracteres.")
+		return
+	}
+	results, warnings, err := h.metadata.Search(r.Context(), query)
+	if errors.Is(err, bookmetadata.ErrUnavailable) {
+		writeError(w, http.StatusBadGateway, "Os provedores de metadados estão indisponíveis.")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "Não foi possível pesquisar os metadados.")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"results": results, "warnings": warnings})
+}
+
 func (h *Handler) getBook(w http.ResponseWriter, r *http.Request) {
 	user, ok := h.authenticatedUser(w, r)
 	if !ok {
@@ -231,6 +261,9 @@ func (h *Handler) createBook(w http.ResponseWriter, r *http.Request) {
 		defer r.MultipartForm.RemoveAll()
 	}
 	if !ok {
+		return
+	}
+	if !h.resolveSelectedCover(w, r, &metadata) {
 		return
 	}
 	defer file.Close()
@@ -274,6 +307,9 @@ func (h *Handler) updateBook(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	if !h.resolveSelectedCover(w, r, &metadata) {
+		return
+	}
 	if file != nil {
 		defer file.Close()
 	}
@@ -283,6 +319,30 @@ func (h *Handler) updateBook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]storage.Book{"book": updated})
+}
+
+func (h *Handler) bookCover(w http.ResponseWriter, r *http.Request) {
+	if _, ok := h.authenticatedUser(w, r); !ok {
+		return
+	}
+	id, err := parseBookID(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "Identificador de livro inválido.")
+		return
+	}
+	book, file, contentType, err := h.books.OpenCover(r.Context(), id)
+	if errors.Is(err, storage.ErrBookNotFound) || errors.Is(err, os.ErrNotExist) {
+		http.NotFound(w, r)
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Não foi possível abrir a capa.")
+		return
+	}
+	defer file.Close()
+	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Cache-Control", "private, no-store")
+	http.ServeContent(w, r, book.CoverKey, book.UpdatedAt, file)
 }
 
 func (h *Handler) bookFile(w http.ResponseWriter, r *http.Request) {
@@ -349,8 +409,14 @@ func parseBookUpload(w http.ResponseWriter, r *http.Request, requireFile bool) (
 		writeError(w, http.StatusBadRequest, "Formulário inválido.")
 		return books.Metadata{}, nil, "", false
 	}
+	allowedFields := map[string]bool{
+		"title": true, "author": true, "description": true, "publisher": true,
+		"published_date": true, "isbn": true, "language": true, "page_count": true,
+		"categories": true, "metadata_source": true, "metadata_id": true,
+		"provider": true, "provider_id": true, "cover_url": true, "metadata_selected": true,
+	}
 	for field, values := range form.Value {
-		if (field != "title" && field != "author" && field != "description") || len(values) != 1 {
+		if !allowedFields[field] || len(values) != 1 {
 			writeError(w, http.StatusBadRequest, "Metadados inválidos.")
 			return books.Metadata{}, nil, "", false
 		}
@@ -361,9 +427,39 @@ func parseBookUpload(w http.ResponseWriter, r *http.Request, requireFile bool) (
 		return books.Metadata{}, nil, "", false
 	}
 	metadata := books.Metadata{
-		Title:       titleValues[0],
-		Author:      firstFormValue(form.Value["author"]),
-		Description: firstFormValue(form.Value["description"]),
+		Title:         titleValues[0],
+		Author:        firstFormValue(form.Value["author"]),
+		Description:   firstFormValue(form.Value["description"]),
+		Publisher:     firstFormValue(form.Value["publisher"]),
+		PublishedDate: firstFormValue(form.Value["published_date"]),
+		ISBN:          firstFormValue(form.Value["isbn"]),
+		Language:      firstFormValue(form.Value["language"]),
+		MetadataSource: firstFormValue(form.Value["provider"]),
+		MetadataID:    firstFormValue(form.Value["provider_id"]),
+		CoverURL:      firstFormValue(form.Value["cover_url"]),
+	}
+	metadata.PageCount, err = strconv.Atoi(firstFormValue(form.Value["page_count"]))
+	if err != nil && len(form.Value["page_count"]) > 0 {
+		writeError(w, http.StatusBadRequest, "Número de páginas inválido.")
+		return books.Metadata{}, nil, "", false
+	}
+	var categories []string
+	if rawCategories := firstFormValue(form.Value["categories"]); rawCategories != "" {
+		if err := json.Unmarshal([]byte(rawCategories), &categories); err != nil || len(categories) > 50 {
+			writeError(w, http.StatusBadRequest, "Categorias inválidas.")
+			return books.Metadata{}, nil, "", false
+		}
+		metadata.Categories = categories
+	}
+	selected := firstFormValue(form.Value["metadata_selected"])
+	if selected != "" && selected != "true" && selected != "false" {
+		writeError(w, http.StatusBadRequest, "Seleção de metadados inválida.")
+		return books.Metadata{}, nil, "", false
+	}
+	metadata.CoverChanged = selected == "true"
+	if metadata.CoverChanged && (metadata.MetadataSource == "" || metadata.MetadataID == "") {
+		writeError(w, http.StatusBadRequest, "Selecione um resultado de metadados válido.")
+		return books.Metadata{}, nil, "", false
 	}
 
 	var fileHeaders []*multipart.FileHeader
@@ -387,6 +483,19 @@ func parseBookUpload(w http.ResponseWriter, r *http.Request, requireFile bool) (
 		return books.Metadata{}, nil, "", false
 	}
 	return metadata, file, fileHeaders[0].Filename, true
+}
+
+func (h *Handler) resolveSelectedCover(w http.ResponseWriter, r *http.Request, metadata *books.Metadata) bool {
+	if !metadata.CoverChanged || metadata.CoverURL == "" {
+		return true
+	}
+	image, err := h.metadata.DownloadCover(r.Context(), metadata.MetadataSource, metadata.CoverURL)
+	if err != nil {
+		writeError(w, http.StatusBadGateway, "Não foi possível salvar a capa selecionada.")
+		return false
+	}
+	metadata.CoverImage = image
+	return true
 }
 
 func firstFormValue(values []string) string {
@@ -462,7 +571,7 @@ func writeError(w http.ResponseWriter, status int, message string) {
 
 func (h *Handler) securityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Security-Policy", "default-src 'self'; style-src 'self'; script-src 'self'; connect-src 'self'; frame-src 'self'; img-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'")
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; style-src 'self'; script-src 'self'; connect-src 'self'; frame-src 'self'; img-src 'self' https://books.google.com https://books.googleusercontent.com https://covers.openlibrary.org; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'")
 		w.Header().Set("Referrer-Policy", "no-referrer")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "DENY")

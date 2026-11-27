@@ -42,12 +42,38 @@
         </div>
         <button class="dialog-close" data-close-dialog type="button" aria-label="Fechar">×</button>
       </div>
+      <section class="metadata-search" aria-labelledby="metadata-search-title">
+        <h3 id="metadata-search-title">Buscar metadados do livro</h3>
+        <div class="metadata-search-controls">
+          <input data-metadata-query type="search" maxlength="200" placeholder="Nome do livro">
+          <button class="button-quiet" data-metadata-search type="button">Pesquisar</button>
+        </div>
+        <p class="help" data-metadata-status role="status" aria-live="polite">Pesquise no Google Books e no Open Library.</p>
+        <div class="metadata-results" data-metadata-results></div>
+      </section>
       <label for="book-title">Título</label>
       <input id="book-title" name="title" type="text" maxlength="250" required>
       <label for="book-author">Autor</label>
       <input id="book-author" name="author" type="text" maxlength="250">
       <label for="book-description">Descrição</label>
       <textarea id="book-description" name="description" rows="3" maxlength="5000"></textarea>
+      <label for="book-publisher">Editora</label>
+      <input id="book-publisher" name="publisher" type="text" maxlength="250">
+      <label for="book-published-date">Data de publicação</label>
+      <input id="book-published-date" name="published_date" type="text" maxlength="50">
+      <label for="book-isbn">ISBN</label>
+      <input id="book-isbn" name="isbn" type="text" maxlength="32">
+      <label for="book-language">Idioma</label>
+      <input id="book-language" name="language" type="text" maxlength="50">
+      <label for="book-page-count">Número de páginas</label>
+      <input id="book-page-count" name="page_count" type="number" min="0" max="100000">
+      <label for="book-categories">Categorias</label>
+      <input id="book-categories" data-book-categories type="text" maxlength="500" placeholder="Separadas por vírgula">
+      <input name="categories" data-categories-json type="hidden">
+      <input name="provider" data-metadata-provider type="hidden">
+      <input name="provider_id" data-metadata-id type="hidden">
+      <input name="cover_url" data-metadata-cover type="hidden">
+      <input name="metadata_selected" data-metadata-selected type="hidden" value="false">
       <label for="book-file" data-file-label>Arquivo do livro</label>
       <input id="book-file" name="file" type="file" data-book-file required>
       <p class="help" data-file-help>Envie um arquivo de até 100 MiB. EPUB e PDF podem ser lidos no navegador.</p>

@@ -156,6 +156,7 @@ button:disabled { cursor: wait; opacity: .7; }
 .primary-button:disabled { cursor: wait; opacity: .7; }
 .book-list { display: grid; gap: 14px; margin-top: 22px; }
 .book-card { display: flex; align-items: center; justify-content: space-between; gap: 28px; padding: 22px 24px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+.book-cover { width: 68px; height: 96px; flex: 0 0 auto; border-radius: 4px; object-fit: cover; background: var(--surface-soft); }
 .book-information { min-width: 0; }
 .book-information h3 { margin: 0; overflow-wrap: anywhere; font: 600 20px "Playfair Display", Georgia, serif; }
 .book-author { margin: 6px 0 0; color: var(--green); font-size: 14px; }
@@ -175,6 +176,18 @@ button:disabled { cursor: wait; opacity: .7; }
 .dialog-heading { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 12px; }
 .dialog-heading .eyebrow { margin: 0; }
 .dialog-heading h2 { margin: 7px 0 0; font: 600 25px "Playfair Display", Georgia, serif; }
+.metadata-search { margin: 8px 0 10px; padding: 15px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-soft); }
+.metadata-search h3 { margin: 0 0 10px; font-size: 14px; }
+.metadata-search-controls { display: flex; gap: 8px; }
+.metadata-search-controls input { min-width: 0; }
+.metadata-search-controls button { flex: 0 0 auto; }
+.metadata-results { display: grid; gap: 8px; margin-top: 10px; }
+.metadata-result { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); text-align: left; }
+.metadata-result:hover { background: var(--cream); }
+.metadata-result img { width: 36px; height: 52px; flex: 0 0 auto; object-fit: cover; border-radius: 3px; }
+.metadata-result-copy { min-width: 0; }
+.metadata-result-copy strong, .metadata-result-copy span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.metadata-result-copy span { margin-top: 3px; color: var(--muted); font-size: 11px; }
 .dialog-close { min-width: 36px; min-height: 36px; background: transparent; color: var(--muted); font-size: 26px; }
 .dialog-close:hover { background: var(--cream); color: var(--ink); }
 .book-dialog textarea { width: 100%; padding: 12px 14px; border: 1px solid var(--line); border-radius: 7px; background: var(--surface); color: var(--ink); font: inherit; resize: vertical; }
@@ -205,7 +218,9 @@ button:disabled { cursor: wait; opacity: .7; }
   .dashboard { margin: 48px auto; }
   .catalog-heading { align-items: stretch; flex-direction: column; margin-top: 38px; }
   .catalog-heading .primary-button { width: 100%; }
-  .book-card { align-items: flex-start; flex-direction: column; gap: 18px; padding: 18px; }
+  .book-card { align-items: flex-start; flex-wrap: wrap; gap: 14px; padding: 18px; }
+  .book-cover { width: 58px; height: 82px; }
+  .book-information { flex: 1; }
   .book-actions { width: 100%; }
   .book-actions > * { flex: 1; }
   .book-dialog { padding: 24px 20px; }

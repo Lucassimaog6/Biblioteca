@@ -94,6 +94,10 @@ async function initializeDashboard() {
   const dialog = document.querySelector("[data-book-dialog]");
   const form = document.querySelector("[data-book-form]");
   const fileInput = document.querySelector("[data-book-file]");
+  const metadataQuery = document.querySelector("[data-metadata-query]");
+  const metadataSearch = document.querySelector("[data-metadata-search]");
+  const metadataStatus = document.querySelector("[data-metadata-status]");
+  const metadataResults = document.querySelector("[data-metadata-results]");
   let currentBook = null;
 
   try {
@@ -148,6 +152,13 @@ async function initializeDashboard() {
     const title = document.createElement("h3");
     title.textContent = book.title;
     information.append(title);
+    if (book.has_cover) {
+      const cover = document.createElement("img");
+      cover.className = "book-cover";
+      cover.src = `/api/v1/books/${book.id}/cover`;
+      cover.alt = `Capa de ${book.title}`;
+      card.append(cover);
+    }
     if (book.author) {
       const author = document.createElement("p");
       author.className = "book-author";
@@ -190,6 +201,19 @@ async function initializeDashboard() {
     form.querySelector("#book-title").value = book?.title || "";
     form.querySelector("#book-author").value = book?.author || "";
     form.querySelector("#book-description").value = book?.description || "";
+    form.querySelector("#book-publisher").value = book?.publisher || "";
+    form.querySelector("#book-published-date").value = book?.published_date || "";
+    form.querySelector("#book-isbn").value = book?.isbn || "";
+    form.querySelector("#book-language").value = book?.language || "";
+    form.querySelector("#book-page-count").value = book?.page_count || "";
+    form.querySelector("[data-book-categories]").value = (book?.categories || []).join(", ");
+    form.querySelector("[data-metadata-provider]").value = book?.metadata_source || "";
+    form.querySelector("[data-metadata-id]").value = book?.metadata_id || "";
+    form.querySelector("[data-metadata-cover]").value = "";
+    form.querySelector("[data-metadata-selected]").value = "false";
+    metadataQuery.value = book?.title || "";
+    metadataStatus.textContent = "Pesquise no Google Books e no Open Library.";
+    metadataResults.replaceChildren();
     fileInput.required = !book;
     document.querySelector("[data-dialog-title]").textContent = book ? "Editar livro" : "Enviar livro";
     document.querySelector("[data-file-label]").textContent = book ? "Substituir arquivo (opcional)" : "Arquivo do livro";
@@ -204,6 +228,83 @@ async function initializeDashboard() {
   document.querySelectorAll("[data-close-dialog]").forEach((button) => {
     button.addEventListener("click", () => dialog.close());
   });
+
+  metadataSearch.addEventListener("click", async () => {
+    const query = metadataQuery.value.trim();
+    metadataResults.replaceChildren();
+    if (!query) {
+      metadataStatus.textContent = "Informe o nome do livro para pesquisar.";
+      return;
+    }
+    metadataSearch.disabled = true;
+    metadataStatus.textContent = "Pesquisando nos provedores…";
+    try {
+      const response = await fetch(`/api/v1/books/metadata/search?query=${encodeURIComponent(query)}`);
+      const result = await response.json();
+      if (!response.ok) {
+        metadataStatus.textContent = result.error || "Não foi possível pesquisar os metadados.";
+        return;
+      }
+      if (result.results.length === 0) {
+        metadataStatus.textContent = "Nenhum resultado encontrado.";
+        return;
+      }
+      for (const book of result.results) metadataResults.append(renderMetadataResult(book));
+      metadataStatus.textContent = result.warnings.length
+        ? `Resultados parciais; indisponível: ${result.warnings.join(", ")}.`
+        : "Escolha uma opção para preencher os metadados.";
+    } catch {
+      metadataStatus.textContent = "Não foi possível conectar aos provedores.";
+    } finally {
+      metadataSearch.disabled = false;
+    }
+  });
+  metadataQuery.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      metadataSearch.click();
+    }
+  });
+
+  function renderMetadataResult(result) {
+    const option = document.createElement("button");
+    option.className = "metadata-result";
+    option.type = "button";
+    if (result.cover_url) {
+      const cover = document.createElement("img");
+      cover.src = result.cover_url;
+      cover.alt = "";
+      cover.referrerPolicy = "no-referrer";
+      option.append(cover);
+    }
+    const copy = document.createElement("span");
+    copy.className = "metadata-result-copy";
+    const title = document.createElement("strong");
+    title.textContent = result.title;
+    const details = document.createElement("span");
+    const provider = result.provider === "google_books" ? "Google Books" : "Open Library";
+    details.textContent = [result.author, result.published_date, provider].filter(Boolean).join(" · ");
+    copy.append(title, details);
+    option.append(copy);
+    option.addEventListener("click", () => {
+      form.querySelector("#book-title").value = result.title || "";
+      form.querySelector("#book-author").value = result.author || "";
+      form.querySelector("#book-description").value = result.description || "";
+      form.querySelector("#book-publisher").value = result.publisher || "";
+      form.querySelector("#book-published-date").value = result.published_date || "";
+      form.querySelector("#book-isbn").value = result.isbn || "";
+      form.querySelector("#book-language").value = result.language || "";
+      form.querySelector("#book-page-count").value = result.page_count || "";
+      form.querySelector("[data-book-categories]").value = (result.categories || []).join(", ");
+      form.querySelector("[data-metadata-provider]").value = result.provider;
+      form.querySelector("[data-metadata-id]").value = result.id;
+      form.querySelector("[data-metadata-cover]").value = result.cover_url || "";
+      form.querySelector("[data-metadata-selected]").value = "true";
+      metadataStatus.textContent = "Metadados selecionados. Você pode editá-los antes de salvar.";
+    });
+    return option;
+  }
+
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     const error = document.querySelector("[data-book-error]");
@@ -211,6 +312,11 @@ async function initializeDashboard() {
     error.textContent = "";
     submit.disabled = true;
     try {
+      const categoryValues = form.querySelector("[data-book-categories]").value
+        .split(",")
+        .map((category) => category.trim())
+        .filter(Boolean);
+      form.querySelector("[data-categories-json]").value = JSON.stringify(categoryValues);
       const payload = new FormData(form);
       if (fileInput.files.length === 0) payload.delete("file");
       const url = currentBook ? `/api/v1/books/${currentBook.id}` : "/api/v1/books";
