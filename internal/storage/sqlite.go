@@ -28,27 +28,27 @@ type User struct {
 }
 
 type Book struct {
-	ID            int64     `json:"id"`
-	Title         string    `json:"title"`
-	Author        string    `json:"author"`
-	Description   string    `json:"description"`
-	Publisher     string    `json:"publisher"`
-	PublishedDate string    `json:"published_date"`
-	ISBN          string    `json:"isbn"`
-	Language      string    `json:"language"`
-	PageCount     int       `json:"page_count"`
-	Categories    []string  `json:"categories"`
-	MetadataSource string   `json:"metadata_source"`
-	MetadataID    string    `json:"metadata_id"`
-	Filename      string    `json:"filename"`
-	FileSize      int64     `json:"file_size"`
-	HasCover      bool      `json:"has_cover"`
-	CreatedAt     time.Time `json:"created_at"`
-	UpdatedAt     time.Time `json:"updated_at"`
-	CanEdit       bool      `json:"can_edit"`
-	OwnerID       int64     `json:"-"`
-	FileKey       string    `json:"-"`
-	CoverKey      string    `json:"-"`
+	ID             int64     `json:"id"`
+	Title          string    `json:"title"`
+	Author         string    `json:"author"`
+	Description    string    `json:"description"`
+	Publisher      string    `json:"publisher"`
+	PublishedDate  string    `json:"published_date"`
+	ISBN           string    `json:"isbn"`
+	Language       string    `json:"language"`
+	PageCount      int       `json:"page_count"`
+	Categories     []string  `json:"categories"`
+	MetadataSource string    `json:"metadata_source"`
+	MetadataID     string    `json:"metadata_id"`
+	Filename       string    `json:"filename"`
+	FileSize       int64     `json:"file_size"`
+	HasCover       bool      `json:"has_cover"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
+	CanEdit        bool      `json:"can_edit"`
+	OwnerID        int64     `json:"-"`
+	FileKey        string    `json:"-"`
+	CoverKey       string    `json:"-"`
 }
 
 type Store struct {

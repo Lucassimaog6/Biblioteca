@@ -246,7 +246,9 @@ async function initializeDashboard() {
         return;
       }
       if (result.results.length === 0) {
-        metadataStatus.textContent = "Nenhum resultado encontrado.";
+        metadataStatus.textContent = result.warnings.length
+          ? `Nenhum resultado; indisponível: ${result.warnings.join(", ")}.`
+          : "Nenhum resultado encontrado.";
         return;
       }
       for (const book of result.results) metadataResults.append(renderMetadataResult(book));

@@ -427,22 +427,27 @@ func parseBookUpload(w http.ResponseWriter, r *http.Request, requireFile bool) (
 		return books.Metadata{}, nil, "", false
 	}
 	metadata := books.Metadata{
-		Title:         titleValues[0],
-		Author:        firstFormValue(form.Value["author"]),
-		Description:   firstFormValue(form.Value["description"]),
-		Publisher:     firstFormValue(form.Value["publisher"]),
-		PublishedDate: firstFormValue(form.Value["published_date"]),
-		ISBN:          firstFormValue(form.Value["isbn"]),
-		Language:      firstFormValue(form.Value["language"]),
+		Title:          titleValues[0],
+		Author:         firstFormValue(form.Value["author"]),
+		Description:    firstFormValue(form.Value["description"]),
+		Publisher:      firstFormValue(form.Value["publisher"]),
+		PublishedDate:  firstFormValue(form.Value["published_date"]),
+		ISBN:           firstFormValue(form.Value["isbn"]),
+		Language:       firstFormValue(form.Value["language"]),
 		MetadataSource: firstFormValue(form.Value["provider"]),
-		MetadataID:    firstFormValue(form.Value["provider_id"]),
-		CoverURL:      firstFormValue(form.Value["cover_url"]),
+		MetadataID:     firstFormValue(form.Value["provider_id"]),
+		CoverURL:       firstFormValue(form.Value["cover_url"]),
 	}
-	metadata.PageCount, err = strconv.Atoi(firstFormValue(form.Value["page_count"]))
-	if err != nil && len(form.Value["page_count"]) > 0 {
-		writeError(w, http.StatusBadRequest, "Número de páginas inválido.")
-		return books.Metadata{}, nil, "", false
+	pageCount := 0
+	if rawPageCount := firstFormValue(form.Value["page_count"]); rawPageCount != "" {
+		parsedPageCount, err := strconv.Atoi(rawPageCount)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "Número de páginas inválido.")
+			return books.Metadata{}, nil, "", false
+		}
+		pageCount = parsedPageCount
 	}
+	metadata.PageCount = pageCount
 	var categories []string
 	if rawCategories := firstFormValue(form.Value["categories"]); rawCategories != "" {
 		if err := json.Unmarshal([]byte(rawCategories), &categories); err != nil || len(categories) > 50 {
@@ -459,6 +464,10 @@ func parseBookUpload(w http.ResponseWriter, r *http.Request, requireFile bool) (
 	metadata.CoverChanged = selected == "true"
 	if metadata.CoverChanged && (metadata.MetadataSource == "" || metadata.MetadataID == "") {
 		writeError(w, http.StatusBadRequest, "Selecione um resultado de metadados válido.")
+		return books.Metadata{}, nil, "", false
+	}
+	if metadata.CoverChanged && metadata.MetadataSource != "google_books" && metadata.MetadataSource != "open_library" {
+		writeError(w, http.StatusBadRequest, "Provedor de metadados inválido.")
 		return books.Metadata{}, nil, "", false
 	}
 

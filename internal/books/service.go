@@ -25,20 +25,20 @@ var (
 const MaxUploadSize int64 = 100 << 20
 
 type Metadata struct {
-	Title         string
-	Author        string
-	Description   string
-	Publisher     string
-	PublishedDate string
-	ISBN          string
-	Language      string
-	PageCount     int
-	Categories    []string
+	Title          string
+	Author         string
+	Description    string
+	Publisher      string
+	PublishedDate  string
+	ISBN           string
+	Language       string
+	PageCount      int
+	Categories     []string
 	MetadataSource string
-	MetadataID    string
-	CoverURL      string
-	CoverImage    []byte
-	CoverChanged  bool
+	MetadataID     string
+	CoverURL       string
+	CoverImage     []byte
+	CoverChanged   bool
 }
 
 type Service struct {
@@ -369,27 +369,27 @@ func (s *Service) filePath(key string) (string, error) {
 	if len(key) != 37 || !strings.HasSuffix(key, ".book") {
 		return "", ErrInvalidBook
 	}
+	if _, err := hex.DecodeString(key[:32]); err != nil {
+		return "", ErrInvalidBook
+	}
+	path := filepath.Join(s.dir, key)
+	relative, err := filepath.Rel(s.dir, path)
+	if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+		return "", ErrInvalidBook
+	}
+	return path, nil
+}
 
-	func (s *Service) coverPath(key string) (string, error) {
-		if len(key) < 36 || len(key) > 37 {
-			return "", ErrInvalidBook
-		}
-		if _, err := hex.DecodeString(key[:32]); err != nil {
-			return "", ErrInvalidBook
-		}
-		switch key[32:] {
-		case ".jpg", ".png", ".webp":
-		default:
-			return "", ErrInvalidBook
-		}
-		path := filepath.Join(s.dir, key)
-		relative, err := filepath.Rel(s.dir, path)
-		if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
-			return "", ErrInvalidBook
-		}
-		return path, nil
+func (s *Service) coverPath(key string) (string, error) {
+	if len(key) < 36 || len(key) > 37 {
+		return "", ErrInvalidBook
 	}
 	if _, err := hex.DecodeString(key[:32]); err != nil {
+		return "", ErrInvalidBook
+	}
+	switch key[32:] {
+	case ".jpg", ".png", ".webp":
+	default:
 		return "", ErrInvalidBook
 	}
 	path := filepath.Join(s.dir, key)

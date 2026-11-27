@@ -7,7 +7,7 @@ Biblioteca será uma biblioteca digital pessoal composta inicialmente por:
 - Um backend em Go para gerenciar livros e expor uma API.
 - Um cliente web que usa essa API para exibir a coleção e permitir a leitura.
 
-Os livros serão armazenados como arquivos no sistema de arquivos, com exatamente um arquivo por livro. O sistema deverá permitir uploads e edição de metadados pelos usuários. Metadados poderão ser obtidos de serviços de terceiros. Durante a leitura, o progresso deverá ser salvo automaticamente.
+O arquivo de conteúdo de cada livro será armazenado como um único arquivo no sistema de arquivos. A capa obtida de um provedor pode ser armazenada como um arquivo adicional associado ao livro. O sistema deverá permitir uploads e edição de metadados pelos usuários. Metadados poderão ser obtidos de serviços de terceiros. Durante a leitura, o progresso deverá ser salvo automaticamente.
 
 No futuro, clientes mobile e um aplicativo nativo para Kindle também deverão conversar com a API. Por isso, funcionalidades do domínio e operações de leitura não devem depender exclusivamente de comportamentos específicos do cliente web.
 
@@ -15,7 +15,7 @@ No futuro, clientes mobile e um aplicativo nativo para Kindle também deverão c
 
 - Use Go para o backend, priorizando desempenho sem sacrificar clareza, segurança ou facilidade de manutenção.
 - Trate a API como uma interface compartilhada entre clientes web, mobile e Kindle.
-- Preserve a relação de um arquivo por livro; não introduza armazenamento dividido em múltiplos arquivos sem uma decisão explícita.
+- Preserve um único arquivo para o conteúdo de cada livro. Capas são imagens opcionais associadas, armazenadas separadamente no diretório autorizado de livros.
 - Considere serviços de metadados externos como dependências sujeitas a falhas; não faça deles a única fonte dos dados editáveis do usuário.
 - Ao lidar com uploads ou caminhos de arquivos, valide entradas e impeça acesso fora do diretório de armazenamento autorizado.
 - Salve o progresso de leitura automaticamente e associe-o ao usuário e ao livro conforme o modelo de identidade definido no projeto.
