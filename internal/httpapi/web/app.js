@@ -157,7 +157,10 @@ async function initializeDashboard() {
       cover.className = "book-cover";
       cover.src = `/api/v1/books/${book.id}/cover`;
       cover.alt = `Capa de ${book.title}`;
+      cover.addEventListener("error", () => cover.replaceWith(createBookCoverPlaceholder(book.title)), { once: true });
       card.append(cover);
+    } else {
+      card.append(createBookCoverPlaceholder(book.title));
     }
     if (book.author) {
       const author = document.createElement("p");
@@ -193,6 +196,15 @@ async function initializeDashboard() {
     actions.append(editButton);
     card.append(information, actions);
     return card;
+  }
+
+  function createBookCoverPlaceholder(title) {
+    const cover = document.createElement("div");
+    cover.className = "book-cover book-cover-placeholder";
+    cover.setAttribute("role", "img");
+    cover.setAttribute("aria-label", `Capa de ${title}`);
+    cover.textContent = title;
+    return cover;
   }
 
   function openBookDialog(book = null) {
