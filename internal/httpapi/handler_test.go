@@ -276,6 +276,32 @@ func TestBookCoverEndpointServesStoredImage(t *testing.T) {
 	}
 }
 
+func TestSelectingMetadataWithoutCoverPreservesCover(t *testing.T) {
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	for name, value := range map[string]string{
+		"title": "Book", "provider": "open_library", "provider_id": "/works/OL1W",
+		"cover_url": "", "metadata_selected": "true", "page_count": "",
+	} {
+		if err := writer.WriteField(name, value); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(http.MethodPut, "/api/v1/books/1", &body)
+	request.Header.Set("Content-Type", writer.FormDataContentType())
+	response := httptest.NewRecorder()
+	metadata, file, _, ok := parseBookUpload(response, request, false)
+	if !ok {
+		t.Fatalf("parse selected metadata: status=%d body=%s", response.Code, response.Body.String())
+	}
+	if file != nil || metadata.CoverChanged || metadata.MetadataSource != "open_library" {
+		t.Fatalf("metadata selection without a cover should preserve the current cover: %+v", metadata)
+	}
+}
+
 func registerTestUser(t *testing.T, handler http.Handler, email string) *http.Cookie {
 	t.Helper()
 	request := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register",

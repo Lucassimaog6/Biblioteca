@@ -461,12 +461,13 @@ func parseBookUpload(w http.ResponseWriter, r *http.Request, requireFile bool) (
 		writeError(w, http.StatusBadRequest, "Seleção de metadados inválida.")
 		return books.Metadata{}, nil, "", false
 	}
-	metadata.CoverChanged = selected == "true"
-	if metadata.CoverChanged && (metadata.MetadataSource == "" || metadata.MetadataID == "") {
+	metadataSelected := selected == "true"
+	metadata.CoverChanged = metadataSelected && metadata.CoverURL != ""
+	if metadataSelected && (metadata.MetadataSource == "" || metadata.MetadataID == "") {
 		writeError(w, http.StatusBadRequest, "Selecione um resultado de metadados válido.")
 		return books.Metadata{}, nil, "", false
 	}
-	if metadata.CoverChanged && metadata.MetadataSource != "google_books" && metadata.MetadataSource != "open_library" {
+	if metadataSelected && metadata.MetadataSource != "google_books" && metadata.MetadataSource != "open_library" {
 		writeError(w, http.StatusBadRequest, "Provedor de metadados inválido.")
 		return books.Metadata{}, nil, "", false
 	}

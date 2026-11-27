@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 )
@@ -89,6 +90,31 @@ func TestDownloadCoverRestrictsHostAndValidatesImage(t *testing.T) {
 	}
 	if _, err := service.DownloadCover(context.Background(), "google_books", "https://covers.openlibrary.org/b/id/123-M.jpg"); err == nil {
 		t.Fatal("expected provider and cover host mismatch to be rejected")
+	}
+}
+
+func TestProviderRedirectPolicyRestrictsDestinations(t *testing.T) {
+	allowedURL, err := url.Parse("https://books.googleusercontent.com/books/content")
+	if err != nil {
+		t.Fatal(err)
+	}
+	allowed := &http.Request{URL: allowedURL}
+	if err := allowProviderRedirects(allowed, []*http.Request{{}}); err != nil {
+		t.Fatalf("approved cover redirect rejected: %v", err)
+	}
+
+	for _, target := range []string{
+		"http://books.google.com/books/content",
+		"https://example.com/image.jpg",
+		"https://covers.openlibrary.org:8443/b/id/1-M.jpg",
+	} {
+		redirectURL, err := url.Parse(target)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := allowProviderRedirects(&http.Request{URL: redirectURL}, []*http.Request{{}}); err == nil {
+			t.Errorf("unapproved redirect %q was allowed", target)
+		}
 	}
 }
 

@@ -84,13 +84,24 @@ type Service struct {
 func NewService() *Service {
 	return &Service{
 		client: &http.Client{
-			Timeout: 6 * time.Second,
-			CheckRedirect: func(*http.Request, []*http.Request) error {
-				return http.ErrUseLastResponse
-			},
+			Timeout:       6 * time.Second,
+			CheckRedirect: allowProviderRedirects,
 		},
 		googleURL:      "https://www.googleapis.com/books/v1/volumes",
 		openLibraryURL: "https://openlibrary.org/search.json",
+	}
+}
+
+func allowProviderRedirects(request *http.Request, previous []*http.Request) error {
+	if len(previous) >= 5 || request.URL.Scheme != "https" || request.URL.User != nil || request.URL.Port() != "" {
+		return http.ErrUseLastResponse
+	}
+	switch strings.ToLower(request.URL.Hostname()) {
+	case "www.googleapis.com", "books.google.com", "books.googleusercontent.com",
+		"openlibrary.org", "covers.openlibrary.org":
+		return nil
+	default:
+		return http.ErrUseLastResponse
 	}
 }
 
