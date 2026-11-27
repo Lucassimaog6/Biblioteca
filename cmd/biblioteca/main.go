@@ -24,7 +24,7 @@ func main() {
 }
 
 func run() error {
-	address := envOrDefault("BIBLIOTECA_ADDR", ":1234")
+	address := envOrDefault("BIBLIOTECA_ADDR", ":8080")
 	databasePath := envOrDefault("BIBLIOTECA_DB_PATH", "data/biblioteca.db")
 	booksDirectory := envOrDefault("BIBLIOTECA_BOOKS_DIR", "data/books")
 	secureCookies := os.Getenv("BIBLIOTECA_COOKIE_SECURE") == "1"

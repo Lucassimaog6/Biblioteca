@@ -1,0 +1,16 @@
+services:
+  biblioteca:
+    build:
+      context: .
+    ports:
+      - "${BIBLIOTECA_PORT:-8080}:8080"
+    environment:
+      BIBLIOTECA_ADDR: ":8080"
+      BIBLIOTECA_DB_PATH: /data/biblioteca.db
+      BIBLIOTECA_BOOKS_DIR: /data/books
+    volumes:
+      - biblioteca-data:/data
+    restart: unless-stopped
+
+volumes:
+  biblioteca-data:

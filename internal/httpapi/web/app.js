@@ -1,3 +1,40 @@
+function getInitialTheme() {
+  try {
+    const savedTheme = localStorage.getItem("biblioteca-theme");
+    if (savedTheme === "light" || savedTheme === "dark") return savedTheme;
+  } catch {}
+  return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+
+function initializeTheme() {
+  let theme = getInitialTheme();
+
+  function applyTheme() {
+    document.documentElement.dataset.theme = theme;
+    const nextTheme = theme === "dark" ? "light" : "dark";
+    const nextThemeLabel = nextTheme === "dark" ? "escuro" : "claro";
+    document.querySelectorAll("[data-theme-toggle]").forEach((button) => {
+      button.setAttribute("aria-label", `Ativar tema ${nextThemeLabel}`);
+      button.title = `Ativar tema ${nextThemeLabel}`;
+      button.querySelector("[data-theme-icon]").textContent = nextTheme === "dark" ? "☾" : "☀";
+      button.querySelector("[data-theme-label]").textContent = `Tema ${nextThemeLabel}`;
+    });
+  }
+
+  document.querySelectorAll("[data-theme-toggle]").forEach((button) => {
+    button.addEventListener("click", () => {
+      theme = theme === "dark" ? "light" : "dark";
+      try {
+        localStorage.setItem("biblioteca-theme", theme);
+      } catch {}
+      applyTheme();
+    });
+  });
+  applyTheme();
+}
+
+initializeTheme();
+
 document.addEventListener("DOMContentLoaded", () => {
   const form = document.querySelector("[data-auth-form]");
   if (form) {

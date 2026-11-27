@@ -43,6 +43,16 @@ Configuração opcional:
 
 Em produção, sirva a aplicação exclusivamente por HTTPS e habilite o cookie seguro quando houver terminação TLS fora do processo Go.
 
+### Executar com Docker Compose
+
+Requer Docker com o plugin Compose. Na raiz do projeto:
+
+```sh
+docker compose up --build
+```
+
+Abra `http://localhost:8080`. Para parar a aplicação, use `docker compose down`. O banco SQLite e os arquivos dos livros ficam no volume persistente `biblioteca-data`; para escolher outra porta no computador, defina `BIBLIOTECA_PORT` antes de iniciar. Remover o volume com `docker compose down --volumes` também apaga esses dados.
+
 ### API de autenticação
 
 - `POST /api/v1/auth/register` — recebe `{ "email": "...", "password": "..." }`, cria a conta e inicia uma sessão.
