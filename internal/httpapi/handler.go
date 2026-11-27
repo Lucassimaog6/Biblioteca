@@ -501,8 +501,8 @@ func (h *Handler) resolveSelectedCover(w http.ResponseWriter, r *http.Request, m
 	}
 	image, err := h.metadata.DownloadCover(r.Context(), metadata.MetadataSource, metadata.CoverURL)
 	if err != nil {
-		writeError(w, http.StatusBadGateway, "Não foi possível salvar a capa selecionada.")
-		return false
+		metadata.CoverChanged = false
+		return true
 	}
 	metadata.CoverImage = image
 	return true

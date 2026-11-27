@@ -157,6 +157,7 @@ button:disabled { cursor: wait; opacity: .7; }
 .book-list { display: grid; gap: 14px; margin-top: 22px; }
 .book-card { display: flex; align-items: center; justify-content: space-between; gap: 28px; padding: 22px 24px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
 .book-cover { width: 68px; height: 96px; flex: 0 0 auto; border-radius: 4px; object-fit: cover; background: var(--surface-soft); }
+.book-cover-placeholder { display: flex; align-items: center; justify-content: center; overflow: hidden; padding: 6px; background: var(--green); color: var(--surface); text-align: center; overflow-wrap: anywhere; font: 600 11px/1.2 "Playfair Display", Georgia, serif; }
 .book-information { min-width: 0; }
 .book-information h3 { margin: 0; overflow-wrap: anywhere; font: 600 20px "Playfair Display", Georgia, serif; }
 .book-author { margin: 6px 0 0; color: var(--green); font-size: 14px; }

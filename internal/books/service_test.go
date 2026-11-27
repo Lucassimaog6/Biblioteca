@@ -108,6 +108,37 @@ func TestCreateRejectsEmptyFileAndInvalidMetadata(t *testing.T) {
 	}
 }
 
+func TestCreateSucceedsWhenCoverCannotBeStored(t *testing.T) {
+	ctx := context.Background()
+	store, err := storage.Open(ctx, filepath.Join(t.TempDir(), "books.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	directory := filepath.Join(t.TempDir(), "files")
+	service, err := NewService(store, directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	user, err := store.CreateUser(ctx, "cover-failure@example.com", "password hash")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	book, err := service.Create(ctx, user.ID, Metadata{
+		Title: "Book without a cover", CoverChanged: true, CoverImage: []byte("not an image"),
+	}, "book.epub", strings.NewReader("book contents"))
+	if err != nil {
+		t.Fatalf("create book without a storable cover: %v", err)
+	}
+	if book.Title != "Book without a cover" || book.HasCover || book.CoverKey != "" {
+		t.Fatalf("unexpected book after optional cover failure: %+v", book)
+	}
+	if _, err := os.Stat(filepath.Join(directory, book.FileKey)); err != nil {
+		t.Fatalf("book file should be saved despite the cover failure: %v", err)
+	}
+}
+
 func TestBookMetadataAndCoverArePersisted(t *testing.T) {
 	ctx := context.Background()
 	store, err := storage.Open(ctx, filepath.Join(t.TempDir(), "books.sqlite"))
@@ -160,5 +191,15 @@ func TestBookMetadataAndCoverArePersisted(t *testing.T) {
 	}
 	if !updated.HasCover {
 		t.Fatal("metadata-only update should retain the existing cover")
+	}
+
+	updated, err = service.Update(ctx, book.ID, user.ID, Metadata{
+		Title: "Updated without new cover", CoverChanged: true, CoverImage: []byte("not an image"),
+	}, "", nil)
+	if err != nil {
+		t.Fatalf("update book when replacement cover cannot be stored: %v", err)
+	}
+	if !updated.HasCover || updated.CoverKey != book.CoverKey {
+		t.Fatalf("failed replacement should preserve the existing cover: %+v", updated)
 	}
 }

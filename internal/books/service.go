@@ -127,10 +127,9 @@ func (s *Service) Create(ctx context.Context, ownerID int64, metadata Metadata, 
 	}
 	coverKey := ""
 	if metadata.CoverChanged && len(metadata.CoverImage) > 0 {
-		coverKey, err = s.writeCover(metadata.CoverImage)
-		if err != nil {
-			s.removeFile(key)
-			return storage.Book{}, err
+		if coverKey, err = s.writeCover(metadata.CoverImage); err != nil {
+			log.Printf("store optional book cover: %v", err)
+			coverKey = ""
 		}
 	}
 	book, err := s.store.CreateBook(ctx, storage.Book{
@@ -175,15 +174,13 @@ func (s *Service) Update(ctx context.Context, id, ownerID int64, metadata Metada
 		book.FileKey = replacementKey
 	}
 	if metadata.CoverChanged {
-		replacementCoverKey = ""
 		if len(metadata.CoverImage) > 0 {
-			replacementCoverKey, err = s.writeCover(metadata.CoverImage)
-			if err != nil {
-				if replacementKey != "" {
-					s.removeFile(replacementKey)
-				}
-				return storage.Book{}, err
+			if replacementCoverKey, err = s.writeCover(metadata.CoverImage); err != nil {
+				log.Printf("store optional book cover: %v", err)
+				replacementCoverKey = expectedCoverKey
 			}
+		} else {
+			replacementCoverKey = ""
 		}
 		book.CoverKey = replacementCoverKey
 	}
